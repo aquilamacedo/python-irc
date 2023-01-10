@@ -5,7 +5,6 @@ import threading
 host = 'localhost'
 port = 7777
 buffsz = 10240
-
 HELP_MESSAGE = """The list of commands available are:
     /NICK - Give the user a nickname or change the previous one.
     /USER - Specify a user's username, hostname, and real name.
@@ -23,22 +22,13 @@ def receiveMessages():
   while True:
     try:
       message = client.recv(buffsz).decode('utf-8')
-      # if message == 'QUIT':
-      #   stopThr = True
-      #   print("You have left the server!")
-      #   print("Press <Enter> to exit")
-      #   client.close()
-      # else:
       print(message)
-
-    except Exception as e:
-      print("[EXCEPTION]", e)
+    except:
       client.close()
       break
 
 def sendMessages():
   while True:
-
     message = input("")
     target_name = message[6:]
 
@@ -52,18 +42,14 @@ def sendMessages():
           client.send(f"HELP {HELP_MESSAGE}".encode('utf-8'))
 
         elif message.startswith("/QUIT"):
-          client.send(f"QUIT {target_name}".encode('utf-8'))
+          client.send(f"QUIT".encode('utf-8'))
+          client.close()
+          break
     else:
       client.send(message.encode('utf-8'))
-
-target_name = ''
 
 thread1 = threading.Thread(target=receiveMessages)
 thread1.start()
 
 thread2 = threading.Thread(target=sendMessages)
 thread2.start()
-#thread2 = threading.Thread(target=sendMessages, args=[target_name])
-
-#thread2.start()
-
