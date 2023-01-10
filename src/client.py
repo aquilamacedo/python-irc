@@ -5,6 +5,8 @@ import threading
 host = 'localhost'
 port = 7777
 buffsz = 10240
+nickname = ''
+
 HELP_MESSAGE = """The list of commands available are:
     /NICK - Give the user a nickname or change the previous one.
     /USER - Specify a user's username, hostname, and real name.
@@ -27,16 +29,18 @@ def receiveMessages():
       client.close()
       break
 
-def sendMessages():
+def sendMessages(nickname):
   while True:
-    message = input("")
-    target_name = message[6:]
-
-    print(f"> {message}")
+    if nickname == '':
+      message = input('> ')
+    else:
+      message = f'<{nickname}> {input("")}'
 
     if message.startswith('/'):
+
         if message.startswith('/NICK'):
-          client.send(f"NICK {target_name}".encode('utf-8'))
+          nickname = message[6:]
+          client.send(f"NICK {nickname}".encode('utf-8'))
 
         elif message.startswith("/HELP"):
           client.send(f"HELP {HELP_MESSAGE}".encode('utf-8'))
@@ -51,5 +55,5 @@ def sendMessages():
 thread1 = threading.Thread(target=receiveMessages)
 thread1.start()
 
-thread2 = threading.Thread(target=sendMessages)
+thread2 = threading.Thread(target=sendMessages, args=[nickname])
 thread2.start()
