@@ -47,7 +47,6 @@ def messagesTreatment(client):
         client.send(f"{help_message[5:]}".encode('utf-8'))
 
       elif msg.decode('utf-8').startswith("QUIT"):
-        nickname = msg.decode('utf-8')[5:]
         quitUser(nickname)
 
       else:
@@ -70,7 +69,7 @@ def quitUser(name):
     client_to_quit.send("You have left the server!".encode('utf-8'))
     client_to_quit.close()
     nicknames.remove(name)
-    broadcast(f"{name} left the chat".encode('utf-8'))
+    broadcast(f"{name} left the chat!".encode('utf-8'))
 
 print("[!] Server is listening...")
 main()
