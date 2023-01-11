@@ -35,6 +35,7 @@ def sendMessages(nickname):
       message = input('> ')
     else:
       message = f'<{nickname}> {input("")}'
+      message = message[9:]
 
     if message.startswith('/'):
 
