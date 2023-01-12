@@ -23,7 +23,7 @@ client.connect((host, port))
 def receiveMessages():
   while True:
     try:
-      message = client.recv(buffsz).decode('utf-8')
+      msg = message = client.recv(buffsz).decode('utf-8')
       print(message)
     except:
       client.close()
@@ -31,25 +31,27 @@ def receiveMessages():
 
 def sendMessages(nickname):
   while True:
-    if nickname == '':
-      message = input('> ')
-    else:
-      message = f'<{nickname}> {input("")}'
-      message = message[9:]
+
+    message = input('> ')
+    print(f"<YOU> {message}")
 
     if message.startswith('/'):
+      if message.startswith('/NICK'):
+        nickname = message[6:]
+        client.send(f"NICK {nickname}".encode('utf-8'))
 
-        if message.startswith('/NICK'):
-          nickname = message[6:]
-          client.send(f"NICK {nickname}".encode('utf-8'))
+      elif message.startswith("/HELP"):
+        client.send(f"HELP {HELP_MESSAGE}".encode('utf-8'))
 
-        elif message.startswith("/HELP"):
-          client.send(f"HELP {HELP_MESSAGE}".encode('utf-8'))
+      elif message.startswith("/QUIT"):
+        client.send(f"QUIT".encode('utf-8'))
+        client.close()
+        break
 
-        elif message.startswith("/QUIT"):
-          client.send(f"QUIT".encode('utf-8'))
-          client.close()
-          break
+      elif message.startswith("/JOIN"):
+        channel_to_join = message[6:]
+        client.send(f"JOIN {channel_to_join}".encode('utf-8'))
+
     else:
       client.send(message.encode('utf-8'))
 

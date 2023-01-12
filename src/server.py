@@ -1,75 +1,131 @@
 import threading
 import socket
+import select
 
 # global contants
 host = 'localhost'
 port = 7777
 buffsz = 10240
 
+# socket configuration
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.bind((host,port))
+s.listen()
+
 # global variables
-clients = list()
+clients = [s]
 nicknames = list()
 
-socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-socket.bind((host,port))
-socket.listen()
-
-def broadcast(message):
-  for client in clients:
-    client.send(message)
+channelDict = dict([("", "")])
+connectedClients = []
+dictClients = {}
+clientIsInChannel = {}
+clientChannel = {}
 
 def main():
   while True:
-    client, address = socket.accept()
-    print(f"[CONNECTION] {address} connected to the server")
+    l, a, b = select.select(clients, [], [])
 
-    thread = threading.Thread(target=messagesTreatment, args=[client])
-    thread.start()
-
-def messagesTreatment(client):
-  while True:
-    try:
-      # bypass to conflict between broadcast and print
-      msg = message = client.recv(buffsz)
-
-      if msg.decode('utf-8').startswith("NICK"):
-        nickname = msg.decode('utf-8')[5:]
-
-        nicknames.append(nickname)
+    for socket in l:
+      # new client connected
+      if socket is s:
+        client, address = socket.accept()
         clients.append(client)
 
-        print(f"Nickname of the client is {nickname}!")
-        broadcast(f"{nickname} joined the chat!".encode('utf-8'))
-        client.send("Connected to the server!".encode('utf-8'))
+        address, port = client.getpeername()
+        clientId = formatAdresse(address, port)
+        print(f"[CONNECTION] {clientId} connected to the server")
 
-      elif msg.decode('utf-8').startswith("HELP"):
-        help_message = msg.decode('utf-8')
-        client.send(f"{help_message[5:]}".encode('utf-8'))
+        dictClients[client] = clientId
+        channelDict[""] = dictClients
+        clientIsInChannel[client] = False
+        clientChannel[client] = ""
+      # new data received
+      else:
+        messagesTreatment(socket)
+
+def formatAdresse(adress, port):
+  ip_address = "\"127.0.0.1:"+ str(port) + "\""
+  return ip_address
+
+# This function allows sending messages between
+# clients connected to the server
+def broadcast(message):
+  for e in range(len(dictClients)):
+    client = [key for key in dictClients.keys()][e]
+    client.send(message)
+
+# This function allows sending message between channels
+def broadcast_channel(message, channel, client):
+  for cl in clients:
+    if cl is not client and cl is not s and cl in channelDict[channel]:
+      cl.send(message)
+
+# This function allows the user to choose a nickname.
+def nickname(name, client):
+  dictClients[client] = name
+  connectedClients.append(name)
+  print(f"Nickname of the client is {name}!")
+  client.send(f"Connected to the server!".encode('utf-8'))
+
+# This function allows the user to exit the server.
+def quitServer(client):
+  nickname = dictClients[client]
+  connectedClients.remove(nickname)
+  clients.remove(client)
+  del dictClients[client]
+  client.send("You have left the server!".encode('utf-8'))
+  client.close()
+  broadcast(f"{nickname} left the chat!".encode('utf-8'))
+
+# This function sends the user a help message.
+def helpMessage(help_msg, client):
+  client.send(help_msg.encode('utf-8'))
+
+# This function creates a channel and add client on it.
+def join(channel, client):
+  if clientIsInChannel[client] == False:
+    nickname = dictClients[client]
+
+    if channel not in channelDict:
+      channelDict[channel] = dict([(client, nickname)])
+    else:
+      channelDict[channel][client] = nickname
+
+    clientIsInChannel[client] = True
+    clientChannel[client] = channel
+    #broadcast(f"{nickname} joined {channel}".encode('utf-8'))
+    broadcast_channel((f"{nickname} joined {channel}!".encode('utf-8')), channel, client)
+  else:
+    client.send("You're already in a channel".encode('utf-8'))
+
+# This function handles messages sent by the user.
+def messagesTreatment(client):
+  try:
+    msg = message = client.recv(buffsz)
+
+    if len(msg) != 0:
+      if msg.decode('utf-8').startswith("NICK"):
+        name = msg.decode('utf-8')[5:]
+        nickname(name, client)
 
       elif msg.decode('utf-8').startswith("QUIT"):
-        quitUser(nickname)
+        quitServer(client)
+
+      elif msg.decode('utf-8').startswith("HELP"):
+        help_message = msg.decode('utf-8')[5:]
+        helpMessage(help_message, client)
+
+      elif msg.decode('utf-8').startswith("JOIN"):
+        channel_to_join = msg.decode('utf-8')[5:]
+        join(channel_to_join, client)
 
       else:
-        broadcast(message)
-    except:
-      if client in clients:
-        index = clients.index(client)
-        clients.remove(client)
-        client.close()
-        nickname = nicknames[index]
-        broadcast(f"{nickname} left the chat!".encode('utf-8'))
-        nicknames.remove(nickname)
-        break
-
-def quitUser(name):
-  if name in nicknames:
-    name_index = nicknames.index(name)
-    client_to_quit = clients[name_index]
-    clients.remove(client_to_quit)
-    client_to_quit.send("You have left the server!".encode('utf-8'))
-    client_to_quit.close()
-    nicknames.remove(name)
-    broadcast(f"{name} left the chat!".encode('utf-8'))
+        if clientIsInChannel[client] == True:
+          broadcast_channel(message, clientChannel[client], client)
+  except:
+      clients.remove(client)
+      client.close()
 
 print("[!] Server is listening...")
 main()
