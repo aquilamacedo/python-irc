@@ -1,147 +1,219 @@
-import threading
-import socket
-import select
+from parser import parse_message
+from socket import socket, AF_INET, SOCK_STREAM
+from threading import Thread
 
-# global contants
 host = 'localhost'
 port = 7777
-buffsz = 10240
+buffsz = 4096
 
-# socket configuration
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.bind((host,port))
-s.listen()
+channels = {}
+client_channels = {}
+nicknames = {}
+users = {}
 
-# global variables
-clients = [s]
-nicknames = list()
-
-channelDict = dict([("", "")])
-connectedClients = []
-dictClients = {}
-clientIsInChannel = {}
-clientChannel = {}
 
 def main():
-  while True:
-    l, a, b = select.select(clients, [], [])
+    server_socket = socket(AF_INET, SOCK_STREAM)
+    server_socket.bind((host, port))
+    server_socket.listen()
 
-    for socket in l:
-      # new client connected
-      if socket is s:
-        client, address = socket.accept()
-        clients.append(client)
+    try:
+        while True:
+            client_socket, _ = server_socket.accept()
 
-        address, port = client.getpeername()
-        clientId = formatAdresse(address, port)
-        print(f"[CONNECTION] {clientId} connected to the server")
+            client_thread = Thread(target=handle_client, args=[client_socket])
+            client_thread.start()
+    except Exception as e:
+        server_socket.close()
+        print(e)
+        exit(-1)
 
-        dictClients[client] = clientId
-        channelDict[""] = dictClients
-        clientIsInChannel[client] = False
-        clientChannel[client] = ""
-      # new data received
-      else:
-        messagesTreatment(socket)
 
-def formatAdresse(adress, port):
-  ip_address = "\"127.0.0.1:"+ str(port) + "\""
-  return ip_address
+def handle_client(client_socket):
+    try:
+        while True:
+            message = client_socket.recv(buffsz).decode('utf-8')
+            interpret_message(message, client_socket)
+    except Exception as e:
+        client_socket.close()
+        print(e)
 
-# This function allows sending messages between
-# clients connected to the server
-def broadcast(message):
-  for e in range(len(dictClients)):
-    client = [key for key in dictClients.keys()][e]
-    client.send(message)
 
-# This function allows sending message between channels
-def broadcast_channel(message, channel, client):
-  for cl in clients:
-    if cl is not client and cl is not s and cl in channelDict[channel]:
-      cl.send(message)
+def interpret_message(message, client_socket):
+    prefix, command, middle, trailing = parse_message(message)
 
-# This function allows the user to choose a nickname.
-def nickname(name, client):
-  dictClients[client] = name
-  connectedClients.append(name)
-  print(f"Nickname of the client is {name}!")
-  client.send(f"Connected to the server!".encode('utf-8'))
-
-# This function allows the user to exit the server.
-def quitServer(client):
-  nickname = dictClients[client]
-  connectedClients.remove(nickname)
-  clients.remove(client)
-  del dictClients[client]
-  client.send("You have left the server!".encode('utf-8'))
-  client.close()
-  broadcast(f"{nickname} left the chat!".encode('utf-8'))
-
-# This function sends the user a help message.
-def helpMessage(help_msg, client):
-  client.send(help_msg.encode('utf-8'))
-
-# This function creates a channel and add client on it.
-def join(channel, client):
-  if clientIsInChannel[client] == False:
-    nickname = dictClients[client]
-
-    if channel not in channelDict:
-      channelDict[channel] = dict([(client, nickname)])
+    if command == 'NICK':
+        set_nickname(middle.copy(), client_socket)
+    elif command == 'USER':
+        create_user(middle.copy(), trailing, client_socket)
+    elif command == 'QUIT':
+        remove_user(trailing, client_socket)
+    elif command == 'JOIN':
+        join_channel(middle.copy(), client_socket)
+    elif command == 'PART':
+        part_channel(middle.copy(), client_socket)
+    elif command == 'LIST':
+        list_channels(client_socket)
+    elif command == 'PRIVMSG':
+        send_message(middle.copy(), trailing, client_socket)
+    elif command == 'WHO':
+        list_users(middle.copy(), client_socket)
     else:
-      channelDict[channel][client] = nickname
+        unknown_command(command, client_socket)
 
-    clientIsInChannel[client] = True
-    clientChannel[client] = channel
 
-    broadcast_channel((f"{nickname} joined {channel}!".encode('utf-8')), channel, client)
-  else:
-    client.send("You're already in a channel".encode('utf-8'))
+def set_nickname(middle, client_socket):
+    if client_socket not in users:
+        client_socket.send(f':{host} 451 :You have not registered'.encode('utf-8'))
+        return
+    if len(middle) < 1:
+        client_socket.send(f':{host} 431 :No nickname given'.encode('utf-8'))
+        return
 
-def listChannels():
-  len_channels = len(channelDict.items())-1
-  channels_list= "[CHANNEL] "
+    nickname = middle[0]
 
-  if len_channels > 1:
-    channels_list= "[CHANNELS] "
+    if not valid_nickname(nickname):
+        client_socket.send(f':{host} 432 :Erroneus nickname'.encode('utf-8'))
+        return
+    for socket in nicknames:
+        if nicknames[socket] == nickname:
+            client_socket.send(f':{host} 433 :Nickname is already in use'.encode('utf-8'))
+            return
+    if client_socket in nicknames:
+        pass  # TODO
 
-  for key, value in channelDict.items():
-    if key != "":
-      channels_list += f'{str(key)} '
+    nicknames[client_socket] = nickname
 
-  broadcast(channels_list.encode('utf-8'))
 
-# This function handles messages sent by the user.
-def messagesTreatment(client):
-  try:
-    msg = message = client.recv(buffsz)
+def create_user(middle, trailing, client_socket):
+    if len(middle) < 2 or trailing is None:
+        client_socket.send(f':{host} 461 USER :Not enough parameters'.encode('utf-8'))
+        return
+    if client_socket in users:
+        client_socket.send(f':{host} 462 :You may not reregister'.encode('utf-8'))
+        return
 
-    if len(msg) != 0:
-      if msg.decode('utf-8').startswith("NICK"):
-        name = msg.decode('utf-8')[5:]
-        nickname(name, client)
+    username, hostname = middle[:2]
+    realname = trailing
 
-      elif msg.decode('utf-8').startswith("QUIT"):
-        quitServer(client)
+    users[client_socket] = (username, hostname, realname)
 
-      elif msg.decode('utf-8').startswith("HELP"):
-        help_message = msg.decode('utf-8')[5:]
-        helpMessage(help_message, client)
 
-      elif msg.decode('utf-8').startswith("JOIN"):
-        channel_to_join = msg.decode('utf-8')[5:]
-        join(channel_to_join, client)
+def remove_user(trailing, client_socket):
+    if client_socket not in users:
+        client_socket.send(f':{host} 451 :You have not registered'.encode('utf-8'))
+        return
 
-      elif msg.decode('utf-8').startswith("LIST"):
-        listChannels()
+    reason = 'Client disconnected' if trailing is None else trailing
 
-      else:
-        if clientIsInChannel[client] == True:
-          broadcast_channel(message, clientChannel[client], client)
-  except:
-      clients.remove(client)
-      client.close()
+    if client_socket in users:
+        users[client_socket] = None
+    if client_socket in nicknames:
+        nicknames[client_socket] = None
+    if client_socket in client_channels:
+        client_channel = client_channels[client_socket]
+        channels[client_channel].remove(client_socket)
+        client_channels[client_socket] = None
 
-print("[!] Server is listening...")
+    # TODO
+
+
+def join_channel(middle, client_socket):
+    if client_socket not in users:
+        client_socket.send(f':{host} 451 :You have not registered'.encode('utf-8'))
+        return
+    if len(middle) < 1:
+        client_socket.send(f':{host} 461 JOIN :Not enough parameters'.encode('utf-8'))
+        return
+
+    channel = middle[0]
+
+    if channel[0] not in '#&':
+        client_socket.send(f':{host} 403 {channel} :No such channel'.encode('utf-8'))
+        return
+
+    channels[channel] = []
+
+    if client_socket in client_channels:
+        client_channel = client_channels[client_socket]
+        part_channel(client_channel, client_socket)
+
+    channels[channel].append(client_socket)
+    client_channels[client_socket] = channel
+    print(channels)
+
+
+def part_channel(middle, client_socket):
+    if client_socket not in users:
+        client_socket.send(f':{host} 451 :You have not registered'.encode('utf-8'))
+        return
+    if len(middle) < 1:
+        client_socket.send(f':{host} 461 PART :Not enough parameters'.encode('utf-8'))
+        return
+
+    channel = middle[0]
+
+    if channel not in channels:
+        client_socket.send(f':{host} 403 {channel} :No such channel'.encode('utf-8'))
+        return
+    if client_socket not in channels[channel]:
+        client_socket.send(f':{host} 442 {channel} :You\'re not on that channel'.encode('utf-8'))
+        return
+
+    channels[channel].remove(client_socket)
+    client_channels[client_socket] = None
+
+    if len(channels[channel]) == 0:
+        channels.pop(channel)
+
+    print(channels)
+
+
+def list_channels(client_socket):
+    if client_socket not in users:
+        client_socket.send(f':{host} 451 :You have not registered'.encode('utf-8'))
+        return
+
+    client_socket.send(f':{host} 321 :Users  Name'.encode('utf-8'))
+
+    for channel in channels:
+        user_count = len(channels[channel])
+        client_socket.send(f':{host} 322 {channel} {user_count}'.encode('utf-8'))
+
+    client_socket.send(f':{host} 323 :End of /LIST'.encode('utf-8'))
+
+
+def send_message(middle, trailing, client_socket):
+    if client_socket not in users:
+        client_socket.send(f':{host} 451 :You have not registered'.encode('utf-8'))
+        return
+
+    return  # TODO
+
+
+def list_users(middle, client_socket):
+    if client_socket not in users:
+        client_socket.send(f':{host} 451 :You have not registered'.encode('utf-8'))
+        return
+
+    return  # TODO
+
+
+def unknown_command(command, client_socket):
+    if client_socket not in users:
+        client_socket.send(f':{host} 451 :You have not registered'.encode('utf-8'))
+        return
+
+    client_socket.send(f':{host} 421 {command} :Unknown command'.encode('utf-8'))
+
+
+def valid_nickname(nickname: str):
+    valid_string = nickname[0].isalpha() and all(map(valid_character, nickname))
+    return (not len(nickname) < 9) and valid_string
+
+
+def valid_character(char: str):
+    return char.isalnum() or char in '-[]\\`^{}'
+
+
 main()
