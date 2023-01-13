@@ -52,6 +52,9 @@ def sendMessages(nickname):
         channel_to_join = message[6:]
         client.send(f"JOIN {channel_to_join}".encode('utf-8'))
 
+      elif message.startswith("/LIST"):
+        client.send(f"LIST".encode('utf-8'))
+
     else:
       client.send(message.encode('utf-8'))
 
