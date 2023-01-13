@@ -55,6 +55,9 @@ def sendMessages(nickname):
       elif message.startswith("/LIST"):
         client.send(f"LIST".encode('utf-8'))
 
+      elif message.startswith("/PART"):
+        client.send(f"PART".encode('utf-8'))
+
     else:
       client.send(message.encode('utf-8'))
 

@@ -99,7 +99,9 @@ def join(channel, client):
   else:
     client.send("You're already in a channel".encode('utf-8'))
 
-def listChannels():
+# This function allows the user to see all
+# active channels on the server.
+def listChannels(client):
   len_channels = len(channelDict.items())-1
   channels_list= "[CHANNEL] "
 
@@ -110,7 +112,26 @@ def listChannels():
     if key != "":
       channels_list += f'{str(key)} '
 
-  broadcast(channels_list.encode('utf-8'))
+  client.send(channels_list.encode('utf-8'))
+
+# This function allows the user to leave a channel
+def partChannel(channel, client):
+  if channel in channelDict:
+    nickname = dictClients[client]
+
+    broadcast_channel((f"{nickname} left the {channel} channel!".encode('utf-8')), channel, client)
+    client.send(f"You left the {channel} channel".encode('utf-8'))
+
+    if client in channelDict[channel]:
+      del channelDict[channel][client]
+      if len(channelDict[channel]) == 0:
+        del channelDict[channel]
+
+    clientIsInChannel[client] = False
+    clientChannel[client] = ""
+
+  elif channel == "":
+    broadcast("You're not in a channel")
 
 # This function handles messages sent by the user.
 def messagesTreatment(client):
@@ -134,7 +155,10 @@ def messagesTreatment(client):
         join(channel_to_join, client)
 
       elif msg.decode('utf-8').startswith("LIST"):
-        listChannels()
+        listChannels(client)
+
+      elif msg.decode('utf-8').startswith("PART"):
+        partChannel(clientChannel[client], client)
 
       else:
         if clientIsInChannel[client] == True:
