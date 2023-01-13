@@ -94,10 +94,23 @@ def join(channel, client):
 
     clientIsInChannel[client] = True
     clientChannel[client] = channel
-    #broadcast(f"{nickname} joined {channel}".encode('utf-8'))
+
     broadcast_channel((f"{nickname} joined {channel}!".encode('utf-8')), channel, client)
   else:
     client.send("You're already in a channel".encode('utf-8'))
+
+def listChannels():
+  len_channels = len(channelDict.items())-1
+  channels_list= "[CHANNEL] "
+
+  if len_channels > 1:
+    channels_list= "[CHANNELS] "
+
+  for key, value in channelDict.items():
+    if key != "":
+      channels_list += f'{str(key)} '
+
+  broadcast(channels_list.encode('utf-8'))
 
 # This function handles messages sent by the user.
 def messagesTreatment(client):
@@ -119,6 +132,9 @@ def messagesTreatment(client):
       elif msg.decode('utf-8').startswith("JOIN"):
         channel_to_join = msg.decode('utf-8')[5:]
         join(channel_to_join, client)
+
+      elif msg.decode('utf-8').startswith("LIST"):
+        listChannels()
 
       else:
         if clientIsInChannel[client] == True:
