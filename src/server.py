@@ -15,14 +15,14 @@ s.listen()
 # global variables
 clients = [s]
 nicknames = list()
-
 channelDict = dict([("", "")])
+allChannels = []
 connectedClients = []
 dictClients = {}
 clientIsInChannel = {}
 clientChannel = {}
-allChannels = []
 dictWho = {}
+dictCredential = {}
 
 def main():
   while True:
@@ -65,10 +65,13 @@ def broadcast_channel(message, channel, client):
 
 # This function allows the user to choose a nickname.
 def nickname(name, client):
-  dictClients[client] = name
-  connectedClients.append(name)
-  print(f"Nickname of the client is {name}!")
-  client.send(f"Connected to the server!".encode('utf-8'))
+  if name not in connectedClients:
+    dictClients[client] = name
+    connectedClients.append(name)
+    print(f"Nickname of the client is {name}!")
+    client.send(f"Connected to the server!".encode('utf-8'))
+  else:
+    client.send(f"[ERROR] Nickname {name} is already in use.".encode('utf-8'))
 
 # This function allows the user to exit the server.
 def quitServer(client):
@@ -194,6 +197,17 @@ def privMessage(channel_or_username, message, client):
         cl.send(f"{current_username} sent you a private message".encode('utf-8'))
         cl.send(message.encode('utf-8'))
 
+def userCredentials(user_credentials, client):
+  handle_credentials = user_credentials.split()
+
+  username = handle_credentials[0]
+  hostname = handle_credentials[1]
+  realname_list = handle_credentials[2:]
+  realname = ' '.join(realname_list)
+
+  for credential in [client, hostname, realname]:
+    dictCredential.setdefault(username, []).append(credential)
+
 # This function handles messages sent by the user.
 def messagesTreatment(client):
   try:
@@ -214,6 +228,10 @@ def messagesTreatment(client):
 
       elif msg.decode('utf-8').startswith("LIST"):
         listChannels(client)
+
+      elif msg.decode('utf-8').startswith("USER"):
+        user_credentials = msg.decode('utf-8')[5:]
+        userCredentials(user_credentials,client)
 
       elif msg.decode('utf-8').startswith("PRIVMSG"):
         priv_treatment = msg.decode('utf-8')[8:]
