@@ -136,6 +136,9 @@ def partChannel(channel, client):
   elif channel == "":
     broadcast("You're not in a channel")
 
+# This function shows all active users in a channel
+# using the command:
+# /WHO <#channel_name>
 def whoChannel(who_channel, client):
   if who_channel in channelDict:
     usersChannel = dictWho[who_channel]
@@ -143,6 +146,53 @@ def whoChannel(who_channel, client):
 
     client.send(f"Online users on {who_channel} channel:\n".encode('utf-8'))
     client.send(print_users.encode('utf-8'))
+
+
+def privMessage(channel_or_username, message, client):
+  if channel_or_username[0] == "#":
+    # Allows a user outside a channel to direct a message
+    # to the channel using the command:
+    # /PRIVMSG <#channel_name> <msg>
+    channel = channel_or_username
+
+    if clientIsInChannel[client] == False:
+      nickname = dictClients[client]
+      dictWho.setdefault(channel, []).append(nickname)
+
+      if channel not in channelDict:
+        channelDict[channel] = dict([(client, nickname)])
+      else:
+        channelDict[channel][client] = nickname
+
+      clientIsInChannel[client] = True
+      clientChannel[client] = channel
+
+      broadcast_channel(message.encode('utf-8'), channel, client)
+
+    if client in channelDict[channel]:
+      del channelDict[channel][client]
+      if len(channelDict[channel]) == 0:
+        del channelDict[channel]
+
+    clientIsInChannel[client] = False
+    clientChannel[client] = ""
+  else:
+    # Allows a user to send a private message to another
+    # user who is active on the server, using the command:
+    # /PRIVMSG <target_username> <msg>
+    target_username = channel_or_username
+    current_username = dictClients[client]
+
+    x = list(dictClients.items())
+
+    for i in range(len(x)):
+      if target_username in x[i]:
+        valueREAL = x[i]
+
+    for cl in clients:
+      if cl is not client and cl is not s and cl in valueREAL:
+        cl.send(f"{current_username} sent you a private message".encode('utf-8'))
+        cl.send(message.encode('utf-8'))
 
 # This function handles messages sent by the user.
 def messagesTreatment(client):
@@ -164,6 +214,14 @@ def messagesTreatment(client):
 
       elif msg.decode('utf-8').startswith("LIST"):
         listChannels(client)
+
+      elif msg.decode('utf-8').startswith("PRIVMSG"):
+        priv_treatment = msg.decode('utf-8')[8:]
+        priv_treatment = priv_treatment.split()
+        channel_or_user = priv_treatment[1]
+        priv_message = priv_treatment[2:]
+        priv_str = ' '.join(priv_message)
+        privMessage(channel_or_user, priv_str, client)
 
       elif msg.decode('utf-8').startswith("PART"):
         partChannel(clientChannel[client], client)
