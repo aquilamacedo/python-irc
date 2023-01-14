@@ -208,6 +208,19 @@ def userCredentials(user_credentials, client):
   for credential in [client, hostname, realname]:
     dictCredential.setdefault(username, []).append(credential)
 
+def whoIsUser(user, client):
+  if user in dictCredential:
+    credentials = dictCredential[user]
+    client_target = credentials[0]
+    hostname_target = credentials[1]
+    realname_target = credentials[2]
+
+    client.send(f"realname : {realname_target}\n".encode('utf-8'))
+    client.send(f"hostname : {hostname_target}\n".encode('utf-8'))
+    client.send(f"server   : {host}".encode('utf-8'))
+  else:
+    client.send(f"[ERROR] The user {user} does not exist".encode('utf-8'))
+
 # This function handles messages sent by the user.
 def messagesTreatment(client):
   try:
@@ -221,6 +234,10 @@ def messagesTreatment(client):
       elif msg.decode('utf-8').startswith("JOIN"):
         channel_to_join = msg.decode('utf-8')[5:]
         join(channel_to_join, client)
+
+      elif msg.decode('utf-8').startswith("WHOIS"):
+        username = msg.decode('utf-8')[6:]
+        whoIsUser(username, client)
 
       elif msg.decode('utf-8').startswith("WHO"):
         who_channel = msg.decode('utf-8')[4:]
