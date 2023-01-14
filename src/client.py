@@ -18,7 +18,7 @@ def main():
     try:
         while True:
             response = client_socket.recv(buffsz).decode('utf-8')
-            print(response)
+            interpret_response(response)
     except Exception as e:
         client_socket.close()
         print(e)
@@ -36,19 +36,9 @@ def handle_input():
         exit(-1)
 
 
-def interpret_message(message):
-    prefix, command, middle, trailing = parse_message(message)
-
-    if command == 'NICK':
-        pass
-    elif command == 'QUIT':
-        pass
-    elif command == 'JOIN':
-        pass
-    elif command == 'PRIVMSG':
-        pass
-    else:
-        print(message)
+def interpret_response(response):
+    prefix, command, middle, trailing = parse_message(response)
+    print(response)
 
 
 main()
