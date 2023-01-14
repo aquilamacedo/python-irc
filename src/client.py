@@ -43,11 +43,6 @@ def sendMessages(nickname):
       elif message.startswith("/HELP"):
         client.send(f"HELP {HELP_MESSAGE}".encode('utf-8'))
 
-      elif message.startswith("/QUIT"):
-        client.send(f"QUIT".encode('utf-8'))
-        client.close()
-        break
-
       elif message.startswith("/JOIN"):
         channel_to_join = message[6:]
         client.send(f"JOIN {channel_to_join}".encode('utf-8'))
@@ -61,6 +56,15 @@ def sendMessages(nickname):
       elif message.startswith("/WHO"):
         who_channel = message[5:]
         client.send(f"WHO {who_channel}".encode('utf-8'))
+
+      elif message.startswith("/PRIVMSG"):
+        channel_or_username = message
+        client.send(f"PRIVMSG {channel_or_username}".encode('utf-8'))
+
+      elif message.startswith("/QUIT"):
+        client.send(f"QUIT".encode('utf-8'))
+        client.close()
+        break
     else:
       client.send(message.encode('utf-8'))
 
