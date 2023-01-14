@@ -58,6 +58,9 @@ def sendMessages(nickname):
       elif message.startswith("/PART"):
         client.send(f"PART".encode('utf-8'))
 
+      elif message.startswith("/WHO"):
+        who_channel = message[5:]
+        client.send(f"WHO {who_channel}".encode('utf-8'))
     else:
       client.send(message.encode('utf-8'))
 
