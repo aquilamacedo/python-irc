@@ -21,6 +21,8 @@ connectedClients = []
 dictClients = {}
 clientIsInChannel = {}
 clientChannel = {}
+allChannels = []
+dictWho = {}
 
 def main():
   while True:
@@ -86,6 +88,7 @@ def helpMessage(help_msg, client):
 def join(channel, client):
   if clientIsInChannel[client] == False:
     nickname = dictClients[client]
+    dictWho.setdefault(channel, []).append(nickname)
 
     if channel not in channelDict:
       channelDict[channel] = dict([(client, nickname)])
@@ -103,16 +106,16 @@ def join(channel, client):
 # active channels on the server.
 def listChannels(client):
   len_channels = len(channelDict.items())-1
-  channels_list= "[CHANNEL] "
+  channelMsg = "[CHANNEL]\n"
 
   if len_channels > 1:
-    channels_list= "[CHANNELS] "
+    channelMsg = "[CHANNELS]\n"
 
-  for key, value in channelDict.items():
-    if key != "":
-      channels_list += f'{str(key)} '
+  channelsList = list(channelDict.keys())
+  print_channels = '\n'.join(map(str,channelsList[1:]))
 
-  client.send(channels_list.encode('utf-8'))
+  client.send(channelMsg.encode('utf-8'))
+  client.send(print_channels.encode('utf-8'))
 
 # This function allows the user to leave a channel
 def partChannel(channel, client):
@@ -133,6 +136,14 @@ def partChannel(channel, client):
   elif channel == "":
     broadcast("You're not in a channel")
 
+def whoChannel(who_channel, client):
+  if who_channel in channelDict:
+    usersChannel = dictWho[who_channel]
+    print_users = '\n'.join(map(str,usersChannel))
+
+    client.send(f"Online users on {who_channel} channel:\n".encode('utf-8'))
+    client.send(print_users.encode('utf-8'))
+
 # This function handles messages sent by the user.
 def messagesTreatment(client):
   try:
@@ -143,22 +154,26 @@ def messagesTreatment(client):
         name = msg.decode('utf-8')[5:]
         nickname(name, client)
 
-      elif msg.decode('utf-8').startswith("QUIT"):
-        quitServer(client)
-
-      elif msg.decode('utf-8').startswith("HELP"):
-        help_message = msg.decode('utf-8')[5:]
-        helpMessage(help_message, client)
-
       elif msg.decode('utf-8').startswith("JOIN"):
         channel_to_join = msg.decode('utf-8')[5:]
         join(channel_to_join, client)
+
+      elif msg.decode('utf-8').startswith("WHO"):
+        who_channel = msg.decode('utf-8')[4:]
+        whoChannel(who_channel, client)
 
       elif msg.decode('utf-8').startswith("LIST"):
         listChannels(client)
 
       elif msg.decode('utf-8').startswith("PART"):
         partChannel(clientChannel[client], client)
+
+      elif msg.decode('utf-8').startswith("QUIT"):
+        quitServer(client)
+
+      elif msg.decode('utf-8').startswith("HELP"):
+        help_message = msg.decode('utf-8')[5:]
+        helpMessage(help_message, client)
 
       else:
         if clientIsInChannel[client] == True:
