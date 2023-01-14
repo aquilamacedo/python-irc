@@ -50,6 +50,10 @@ def sendMessages(nickname):
       elif message.startswith("/LIST"):
         client.send(f"LIST".encode('utf-8'))
 
+      elif message.startswith("/USER"):
+        user_credentials = message[6:]
+        client.send(f"USER {user_credentials}".encode('utf-8'))
+
       elif message.startswith("/PART"):
         client.send(f"PART".encode('utf-8'))
 
