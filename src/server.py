@@ -1,7 +1,7 @@
-from socket import socket, AF_INET, SOCK_STREAM
+from socket import socket, AF_INET, SOCK_STREAM, gethostname
 from threading import Thread
 
-host = 'localhost'
+host = gethostname()
 port = 7777
 buffsz = 4096
 
@@ -23,9 +23,8 @@ def main():
 
             client_thread = Thread(target=handle_client, args=[client_socket, client_address])
             client_thread.start()
-    except Exception as e:
+    except:
         server_socket.close()
-        print(e)
         exit(-1)
 
 
@@ -34,9 +33,8 @@ def handle_client(client_socket, client_address):
         while True:
             message = client_socket.recv(buffsz).decode('utf-8')
             interpret_message(message, client_socket, client_address)
-    except Exception as e:
+    except:
         client_socket.close()
-        print(e)
 
 
 def interpret_message(message, client_socket, client_address):

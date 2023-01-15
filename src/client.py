@@ -1,10 +1,9 @@
-from socket import socket, AF_INET, SOCK_STREAM
+from socket import socket, AF_INET, SOCK_STREAM, gethostname
 from threading import Thread
 
-host = 'localhost'
+host = gethostname()
 port = 7777
 buffsz = 4096
-nickname = ''
 
 client_socket = socket(AF_INET, SOCK_STREAM)
 client_socket.connect((host, port))
@@ -27,9 +26,8 @@ def main():
                 break
 
             print(response)
-    except Exception as e:
+    except:
         client_socket.close()
-        print(e)
         exit(-1)
 
 
@@ -40,9 +38,8 @@ def handle_input():
         while not close_requested:
             message = input()
             client_socket.send(message.encode('utf-8'))
-    except Exception as e:
+    except:
         client_socket.close()
-        print(e)
         exit(-1)
 
 
