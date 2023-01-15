@@ -1,4 +1,3 @@
-from parser import parse_message
 from socket import socket, AF_INET, SOCK_STREAM
 from threading import Thread
 
@@ -20,9 +19,9 @@ def main():
 
     try:
         while True:
-            client_socket, _ = server_socket.accept()
+            client_socket, client_address = server_socket.accept()
 
-            client_thread = Thread(target=handle_client, args=[client_socket])
+            client_thread = Thread(target=handle_client, args=[client_socket, client_address])
             client_thread.start()
     except Exception as e:
         server_socket.close()
@@ -30,23 +29,23 @@ def main():
         exit(-1)
 
 
-def handle_client(client_socket):
+def handle_client(client_socket, client_address):
     try:
         while True:
             message = client_socket.recv(buffsz).decode('utf-8')
-            interpret_message(message, client_socket)
+            interpret_message(message, client_socket, client_address)
     except Exception as e:
         client_socket.close()
         print(e)
 
 
-def interpret_message(message, client_socket):
+def interpret_message(message, client_socket, client_address):
     prefix, command, middle, trailing = parse_message(message)
 
     if command == 'NICK':
         set_nickname(middle.copy(), client_socket)
     elif command == 'USER':
-        create_user(middle.copy(), trailing, client_socket)
+        create_user(middle.copy(), trailing, client_socket, client_address)
     elif command == 'QUIT':
         remove_user(trailing, client_socket)
     elif command == 'JOIN':
@@ -79,14 +78,12 @@ def set_nickname(middle, client_socket):
     if nickname in nicknames:
         client_socket.send(f':{host} 433 :Nickname is already in use'.encode('utf-8'))
         return
-    if client_socket in nicknames:
-        pass  # TODO
 
     nicknames[nickname] = client_socket
     client_nicknames[client_socket] = nickname
 
 
-def create_user(middle, trailing, client_socket):
+def create_user(middle, trailing, client_socket, client_address):
     if len(middle) < 2 or trailing is None:
         client_socket.send(f':{host} 461 USER :Not enough parameters'.encode('utf-8'))
         return
@@ -94,7 +91,8 @@ def create_user(middle, trailing, client_socket):
         client_socket.send(f':{host} 462 :You may not reregister'.encode('utf-8'))
         return
 
-    username, hostname = middle[:2]
+    username = middle[0]
+    hostname = client_address[0]
     realname = trailing
 
     users[client_socket] = (username, hostname, realname)
@@ -117,7 +115,7 @@ def remove_user(trailing, client_socket):
         identifier = f'{client_nicknames[client_socket]}!{users[client_socket][0]}@{users[client_socket[1]]}'
         broadcast(f':{identifier} QUIT :{reason}', client_channels[client_socket])
 
-    # TODO: kill the client process
+    client_socket.close()
 
 
 def join_channel(middle, client_socket):
@@ -292,6 +290,36 @@ def broadcast(message, channel, exclude=()):
     for client_socket in channels[channel]:
         if client_socket not in exclude:
             client_socket.send(message.encode('utf-8'))
+
+
+def parse_message(message):
+    start_idx = 0
+    prefix = None
+
+    if message[start_idx] == ':':
+        end_idx = message.index(' ', start_idx)
+
+        prefix = message[start_idx + 1:end_idx]
+        start_idx = end_idx + 1
+
+    if ' ' in message[start_idx:]:
+        end_idx = message.index(' ', start_idx)
+    else:
+        end_idx = len(message)
+
+    command = message[start_idx:end_idx]
+    start_idx = end_idx + 1
+    trailing = None
+
+    if ':' in message[start_idx:]:
+        end_idx = message.index(':', start_idx)
+        middle = list(filter(None, message[start_idx:end_idx].split(' ')))
+        start_idx = end_idx + 1
+        trailing = message[start_idx:]
+    else:
+        middle = list(filter(None, message[start_idx:].split(' ')))
+
+    return prefix, command, middle, trailing
 
 
 main()
