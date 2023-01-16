@@ -1,9 +1,17 @@
+from parser import parse_message
 from socket import socket, AF_INET, SOCK_STREAM, gethostname
 from threading import Thread
 
+# Server's hostname and port number
 host = gethostname()
 port = 7777
+
 buffsz = 4096
+
+# Server socket configuration
+server_socket = socket(AF_INET, SOCK_STREAM)
+server_socket.bind((host, port))
+server_socket.listen()
 
 channels = {}
 client_channels = {}
@@ -12,11 +20,8 @@ client_nicknames = {}
 users = {}
 
 
+# Main logic
 def main():
-    server_socket = socket(AF_INET, SOCK_STREAM)
-    server_socket.bind((host, port))
-    server_socket.listen()
-
     try:
         while True:
             client_socket, client_address = server_socket.accept()
@@ -28,6 +33,7 @@ def main():
         exit(-1)
 
 
+# Waits for client messages
 def handle_client(client_socket, client_address):
     try:
         while True:
@@ -37,6 +43,7 @@ def handle_client(client_socket, client_address):
         client_socket.close()
 
 
+# Interprets IRC messages from the client
 def interpret_message(message, client_socket, client_address):
     prefix, command, middle, trailing = parse_message(message)
 
@@ -60,6 +67,7 @@ def interpret_message(message, client_socket, client_address):
         unknown_command(command, client_socket)
 
 
+# /NICK command
 def set_nickname(middle, client_socket):
     if client_socket not in users:
         client_socket.send(f':{host} 451 :You have not registered'.encode('utf-8'))
@@ -81,6 +89,7 @@ def set_nickname(middle, client_socket):
     client_nicknames[client_socket] = nickname
 
 
+# /USER command
 def create_user(middle, trailing, client_socket, client_address):
     if len(middle) < 2 or trailing is None:
         client_socket.send(f':{host} 461 USER :Not enough parameters'.encode('utf-8'))
@@ -96,6 +105,7 @@ def create_user(middle, trailing, client_socket, client_address):
     users[client_socket] = (username, hostname, realname)
 
 
+# /QUIT command
 def remove_user(trailing, client_socket):
     if client_socket not in users or client_socket not in client_nicknames:
         client_socket.send(f':{host} 451 :You have not registered'.encode('utf-8'))
@@ -116,6 +126,7 @@ def remove_user(trailing, client_socket):
     client_socket.close()
 
 
+# /JOIN command
 def join_channel(middle, client_socket):
     if client_socket not in users or client_socket not in client_nicknames:
         client_socket.send(f':{host} 451 :You have not registered'.encode('utf-8'))
@@ -140,6 +151,7 @@ def join_channel(middle, client_socket):
     broadcast(f':{client_nicknames[client_socket]} JOIN {channel}', client_channels[client_socket])
 
 
+# /PART command
 def part_channel(middle, client_socket):
     if client_socket not in users or client_socket not in client_nicknames:
         client_socket.send(f':{host} 451 :You have not registered'.encode('utf-8'))
@@ -166,12 +178,13 @@ def part_channel(middle, client_socket):
         channels.pop(channel)
 
 
+# /LIST command
 def list_channels(client_socket):
     if client_socket not in users or client_socket not in client_nicknames:
         client_socket.send(f':{host} 451 :You have not registered'.encode('utf-8'))
         return
 
-    client_socket.send(f':{host} 321 Channel :Users  Name'.encode('utf-8'))
+    client_socket.send(f':{host} 321 Channel :Users'.encode('utf-8'))
 
     for channel in channels:
         user_count = len(channels[channel])
@@ -180,6 +193,7 @@ def list_channels(client_socket):
     client_socket.send(f':{host} 323 :End of /LIST'.encode('utf-8'))
 
 
+# /PRIVMSG command
 def send_message(middle, trailing, client_socket):
     if client_socket not in users or client_socket not in client_nicknames:
         client_socket.send(f':{host} 451 :You have not registered'.encode('utf-8'))
@@ -210,6 +224,7 @@ def send_message(middle, trailing, client_socket):
         respond(f':{client_nicknames[client_socket]} PRIVMSG :{text}', target)
 
 
+# /WHO command
 def list_users(middle, client_socket):
     if client_socket not in users or client_socket not in client_nicknames:
         client_socket.send(f':{host} 451 :You have not registered'.encode('utf-8'))
@@ -265,59 +280,33 @@ def unknown_command(command, client_socket):
     client_socket.send(f':{host} 421 {command} :Unknown command'.encode('utf-8'))
 
 
+# Checks if nickname is valid according to RFC
 def valid_nickname(nickname: str):
     valid_string = nickname[0].isalpha() and all(map(valid_character, nickname))
     return len(nickname) < 9 and valid_string
 
 
+# Check if a certain character in a nickname is valid
 def valid_character(char: str):
     return char.isalnum() or char in '-[]\\`^{}'
 
 
+# Sends a message to another client
 def respond(message, nickname):
     if nickname not in nicknames:
-        return  # TODO
+        return
 
     nicknames[nickname].send(message.encode('utf-8'))
 
 
+# Sends a message to a channel
 def broadcast(message, channel, exclude=()):
     if channel not in channels:
-        return  # TODO
+        return
 
     for client_socket in channels[channel]:
         if client_socket not in exclude:
             client_socket.send(message.encode('utf-8'))
-
-
-def parse_message(message):
-    start_idx = 0
-    prefix = None
-
-    if message[start_idx] == ':':
-        end_idx = message.index(' ', start_idx)
-
-        prefix = message[start_idx + 1:end_idx]
-        start_idx = end_idx + 1
-
-    if ' ' in message[start_idx:]:
-        end_idx = message.index(' ', start_idx)
-    else:
-        end_idx = len(message)
-
-    command = message[start_idx:end_idx]
-    start_idx = end_idx + 1
-    trailing = None
-
-    if ':' in message[start_idx:]:
-        end_idx = message.index(':', start_idx)
-        middle = list(filter(None, message[start_idx:end_idx].split(' ')))
-        start_idx = end_idx + 1
-        trailing = message[start_idx:]
-    else:
-        middle = list(filter(None, message[start_idx:].split(' ')))
-
-    return prefix, command, middle, trailing
 
 
 main()
