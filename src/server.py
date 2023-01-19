@@ -38,6 +38,7 @@ def handle_client(client_socket, client_address):
     try:
         while True:
             message = client_socket.recv(buffsz).decode('utf-8')
+            print(channels)
             interpret_message(message, client_socket, client_address)
     except:
         client_socket.close()
@@ -141,7 +142,8 @@ def join_channel(middle, client_socket):
         client_socket.send(f':{host} 403 {channel} :No such channel'.encode('utf-8'))
         return
 
-    channels[channel] = []
+    if channel not in channels:
+        channels[channel] = []
 
     if client_socket in client_channels:
         part_channel(middle, client_socket)
@@ -215,7 +217,7 @@ def send_message(middle, trailing, client_socket):
             client_socket.send(f':{host} 404 {target} :Cannot send to channel'.encode('utf-8'))
             return
 
-        broadcast(f':{client_nicknames[client_socket]} PRIVMSG :{text}', target, tuple([client_socket]))
+        broadcast(f':{client_nicknames[client_socket]} PRIVMSG :{text}', target)
     else:
         if target not in nicknames:
             client_socket.send(f':{host} 401 {target} :No such nick'.encode('utf=8'))

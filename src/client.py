@@ -3,7 +3,7 @@ from socket import socket, AF_INET, SOCK_STREAM, gethostname
 from threading import Thread
 
 # Server's IP address and port number
-host = None  # TODO
+host = gethostname()
 port = 7777
 
 buffsz = 4096
